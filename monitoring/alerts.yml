@@ -1,0 +1,47 @@
+groups:
+  - name: system
+    rules:
+      - alert: HighCPU
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU 高负载 ({{ $labels.instance }})"
+          description: "CPU 使用率 {{ $value | printf \"%.1f\" }}% 超过 85%"
+
+      - alert: LowMemory
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "内存不足 ({{ $labels.instance }})"
+          description: "可用内存仅剩 {{ $value | printf \"%.1f\" }}%"
+
+      - alert: DiskFull
+        expr: (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 > 90
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "磁盘空间不足 ({{ $labels.instance }})"
+          description: "磁盘使用率 {{ $value | printf \"%.1f\" }}%"
+
+      - alert: HighDiskUsage
+        expr: (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 > 70
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "磁盘使用率较高 ({{ $labels.instance }})"
+          description: "磁盘使用率 {{ $value | printf \"%.1f\" }}%，请关注"
+
+      - alert: NodeDown
+        expr: up{job="node"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "节点离线 ({{ $labels.instance }})"
+          description: "节点 {{ $labels.instance }} 已超过 1 分钟无响应"
