@@ -1,0 +1,16 @@
+version: "3.8"
+
+networks:
+  hamr-net:
+    external: true
+
+services:
+  hamr-website:
+    image: hamr-website:latest
+    container_name: hamr-website
+    restart: unless-stopped
+    networks:
+      - hamr-net
+    labels:
+      - "service=hamr-website"
+      - "domain=hamr.store"

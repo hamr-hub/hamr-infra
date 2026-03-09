@@ -1,0 +1,58 @@
+version: "3.8"
+
+networks:
+  hamr-net:
+    driver: bridge
+    name: hamr-net
+
+services:
+  nginx-proxy:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - hamr-net
+    depends_on:
+      - hamr-website
+      - hamr-help
+      - hamr-developer
+      - hamr-docs
+
+  hamr-website:
+    image: hamr-website:latest
+    container_name: hamr-website
+    restart: unless-stopped
+    networks:
+      - hamr-net
+
+  hamr-help:
+    image: hamr-help:latest
+    container_name: hamr-help
+    restart: unless-stopped
+    networks:
+      - hamr-net
+
+  hamr-developer:
+    image: hamr-developer:latest
+    container_name: hamr-developer
+    restart: unless-stopped
+    networks:
+      - hamr-net
+
+  hamr-docs:
+    image: hamr-docs:latest
+    container_name: hamr-docs
+    restart: unless-stopped
+    networks:
+      - hamr-net
+
+  hamr-deploy:
+    image: hamr-deploy:latest
+    container_name: hamr-deploy
+    restart: unless-stopped
+    networks:
+      - hamr-net
