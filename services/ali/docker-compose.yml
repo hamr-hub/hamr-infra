@@ -1,70 +1,35 @@
 networks:
   hamr-net:
-    driver: bridge
-    name: hamr-net
+    external: true
 
 volumes:
   prometheus_data:
   grafana_data:
-  postgres_data:
-  redis_data:
-  backup_data:
+  postgres_account_data:
+  postgres_app_data:
 
 services:
-  nginx-proxy:
-    image: nginx:alpine
-    container_name: nginx-proxy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-    networks:
-      - hamr-net
-    depends_on:
-      - hamr-website
-      - hamr-help
-      - hamr-developer
-      - hamr-docs
-      - hamr-account
-      - hamr-app
-      - hamr-api-gateway
-
+  # ===== 静态前端 =====
   hamr-website:
-    build: ../../repos/hamr-website
     image: hamr-website:latest
     container_name: hamr-website
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:8100:80"
     networks:
       - hamr-net
 
   hamr-help:
-    build: ../../repos/hamr-help
     image: hamr-help:latest
     container_name: hamr-help
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:8101:80"
     networks:
       - hamr-net
 
-  hamr-developer:
-    build: ../../repos/hamr-developer
-    image: hamr-developer:latest
-    container_name: hamr-developer
-    restart: unless-stopped
-    networks:
-      - hamr-net
-
-  hamr-docs:
-    build: ../../repos/hamr-docs
-    image: hamr-docs:latest
-    container_name: hamr-docs
-    restart: unless-stopped
-    networks:
-      - hamr-net
-
+  # ===== 账号中心 =====
   hamr-account:
-    build: ../../repos/hamr-account/frontend
     image: hamr-account:latest
     container_name: hamr-account
     restart: unless-stopped
@@ -72,39 +37,40 @@ services:
       - hamr-net
 
   hamr-account-api:
-    build: ../../repos/hamr-account/backend
     image: hamr-account-api:latest
     container_name: hamr-account-api
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-hamr}:${POSTGRES_PASSWORD:?}@hamr-postgres:5432/hamr_account
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hamr}:${POSTGRES_PASSWORD:?}@hamr-postgres-account:5432/hamr_account
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       PORT: 3001
+      RUST_LOG: info
     networks:
       - hamr-net
     depends_on:
-      postgres:
+      hamr-postgres-account:
         condition: service_healthy
 
-  hamr-api-gateway:
-    build: ../../repos/hamr-api
-    image: hamr-api-gateway:latest
-    container_name: hamr-api-gateway
+  hamr-postgres-account:
+    image: postgres:16-alpine
+    container_name: hamr-postgres-account
     restart: unless-stopped
     environment:
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      ACCOUNT_SERVICE_URL: http://hamr-account-api:3001
-      APP_SERVICE_URL: http://hamr-app-api:3002
-      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-60}
-      PORT: 8090
+      POSTGRES_USER: ${POSTGRES_USER:-hamr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: hamr_account
+    volumes:
+      - postgres_account_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hamr} -d hamr_account"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks:
       - hamr-net
-    depends_on:
-      - hamr-account-api
-      - hamr-app-api
 
+  # ===== 管家应用 =====
   hamr-app:
-    build: ../../repos/hamr-app/frontend
     image: hamr-app:latest
     container_name: hamr-app
     restart: unless-stopped
@@ -112,49 +78,39 @@ services:
       - hamr-net
 
   hamr-app-api:
-    build: ../../repos/hamr-app/backend
     image: hamr-app-api:latest
     container_name: hamr-app-api
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-hamr}:${POSTGRES_PASSWORD:?}@hamr-postgres:5432/hamr_app
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hamr}:${POSTGRES_PASSWORD:?}@hamr-postgres-app:5432/hamr_app
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       PORT: 3002
+      RUST_LOG: info
     networks:
       - hamr-net
     depends_on:
-      postgres:
+      hamr-postgres-app:
         condition: service_healthy
 
-  postgres:
+  hamr-postgres-app:
     image: postgres:16-alpine
-    container_name: hamr-postgres
+    container_name: hamr-postgres-app
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-hamr}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-      POSTGRES_DB: hamr
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: hamr_app
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./initdb:/docker-entrypoint-initdb.d:ro
+      - postgres_app_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hamr}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hamr} -d hamr_app"]
       interval: 5s
       timeout: 5s
       retries: 10
     networks:
       - hamr-net
 
-  redis:
-    image: redis:7-alpine
-    container_name: hamr-redis
-    restart: unless-stopped
-    command: redis-server --appendonly yes
-    volumes:
-      - redis_data:/data
-    networks:
-      - hamr-net
-
+  # ===== 监控 =====
   node-exporter:
     image: prom/node-exporter:v1.8.1
     container_name: node-exporter
@@ -177,8 +133,8 @@ services:
     container_name: prometheus
     restart: unless-stopped
     volumes:
-      - ../monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ../monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - /opt/hamr/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - /opt/hamr/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
       - prometheus_data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -194,6 +150,8 @@ services:
     image: grafana/grafana:10.4.2
     container_name: grafana
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
@@ -202,7 +160,7 @@ services:
       - GF_SERVER_SERVE_FROM_SUB_PATH=true
     volumes:
       - grafana_data:/var/lib/grafana
-      - ../monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - /opt/hamr/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
     networks:
       - hamr-net
     depends_on:

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SERVER_IP="39.103.188.33"
+SERVER_IP="43.133.224.11"
 
 echo "=== HamR Infrastructure Health Check ==="
 echo ""
@@ -26,6 +26,8 @@ declare -A HTTP_TARGETS=(
     ["help.hamr.store"]=""
     ["docs.hamr.top"]=""
     ["status.hamr.top"]=""
+    ["account.hamr.store"]=""
+    ["app.hamr.store"]=""
 )
 
 for domain in "${!HTTP_TARGETS[@]}"; do
