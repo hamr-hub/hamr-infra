@@ -29,6 +29,7 @@ services:
       - hamr-docs
       - hamr-account
       - hamr-app
+      - hamr-status
       - hamr-api-gateway
 
   hamr-website:
@@ -83,7 +84,31 @@ services:
     networks:
       - hamr-net
     depends_on:
-      postgres:
+      hamr-jiabu:
+    build: ../../repos/hamr-jiabu/frontend
+    image: hamr-jiabu:latest
+    container_name: hamr-jiabu
+    restart: unless-stopped
+    networks:
+      - hamr-net
+
+  hamr-jiabu-api:
+    build: ../../repos/hamr-jiabu/backend
+    image: hamr-jiabu-api:latest
+    container_name: hamr-jiabu-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-hamr}:${POSTGRES_PASSWORD:?}@hamr-postgres:5432/${POSTGRES_DB:-hamr_jiabu}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      HAMR_APP_URL: http://hamr-app-api:8081
+      PORT: 8082
+    networks:
+      - hamr-net
+    depends_on:
+      - postgres
+      - hamr-app-api
+
+  postgres:
         condition: service_healthy
 
   hamr-api-gateway:
@@ -107,6 +132,22 @@ services:
     build: ../../repos/hamr-app/frontend
     image: hamr-app:latest
     container_name: hamr-app
+    restart: unless-stopped
+    networks:
+      - hamr-net
+
+  hamr-status:
+    build: ../../repos/hamr-status
+    image: hamr-status:latest
+    container_name: hamr-status
+    restart: unless-stopped
+    networks:
+      - hamr-net
+
+  hamr-deploy:
+    build: ../../repos/hamr-deploy
+    image: hamr-deploy:latest
+    container_name: hamr-deploy
     restart: unless-stopped
     networks:
       - hamr-net
