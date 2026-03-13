@@ -1,13 +1,57 @@
 #!/bin/bash
 
-set -e
+set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 INFRA_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 BUILDS_DIR="/opt/hamr/builds"
+BACKUP_DIR="/opt/hamr/backups"
 
 ALI_HOST="ali.hamr.top"
 TX_HOST="tx.hamr.store"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+log_info()  { echo -e "${GREEN}>>>${NC} $*"; }
+log_warn()  { echo -e "${YELLOW}>>>${NC} $*"; }
+log_error() { echo -e "${RED}>>>${NC} $*"; }
+
+DEPLOY_FAILURES=()
+
+deploy_guard() {
+    local service=$1
+    local server; server="$(get_server "$service")"
+    local image; image="$(get_image "$service")"
+
+    log_info "Pre-deploy: backing up $image on $server ..."
+    ssh "$server" "
+        if docker image inspect ${image}:latest >/dev/null 2>&1; then
+            docker tag ${image}:latest ${image}:rollback 2>/dev/null || true
+        fi
+        mkdir -p $BACKUP_DIR
+    " 2>/dev/null || true
+}
+
+rollback_service() {
+    local service=$1
+    local server; server="$(get_server "$service")"
+    local image; image="$(get_image "$service")"
+    local compose_dir; compose_dir="$(get_compose_dir "$server")"
+
+    log_warn "Rolling back $image on $server ..."
+    ssh "$server" "
+        if docker image inspect ${image}:rollback >/dev/null 2>&1; then
+            docker tag ${image}:rollback ${image}:latest
+            cd $compose_dir && docker compose up -d --no-deps $image 2>&1
+            echo 'Rollback complete'
+        else
+            echo 'No rollback image available'
+        fi
+    " 2>/dev/null || log_error "Rollback failed for $image"
+}
 
 # 服务 → Docker镜像名
 declare -A SERVICE_MAP=(
@@ -24,6 +68,8 @@ declare -A SERVICE_MAP=(
     [status]="hamr-status"
     [api-gateway]="hamr-api-gateway"
     [deploy]="hamr-deploy"
+    [demo]="hamr-demo"
+    [demo-api]="hamr-demo-api"
 )
 
 # 服务 → 源码相对路径（相对 repos/）
@@ -41,23 +87,26 @@ declare -A SOURCE_MAP=(
     [status]="hamr-status"
     [api-gateway]="hamr-api"
     [deploy]="hamr-deploy"
+    [demo]="hamr-demo/frontend"
+    [demo-api]="hamr-demo/backend"
 )
 
-ALI_SERVICES=(website help account account-api app app-api jiabu jiabu-api status api-gateway deploy)
+ALI_SERVICES=(website help account account-api app app-api jiabu jiabu-api status api-gateway deploy demo demo-api)
 TX_SERVICES=(developer docs)
 
 usage() {
     echo "Usage: $0 <command> [service]"
     echo ""
     echo "Commands:"
-    echo "  deploy [service]  - Sync + build + restart (all or specific)"
-    echo "  build [service]   - Sync + build image only"
-    echo "  restart <service> - Restart a service (no rebuild)"
-    echo "  status            - Show running containers"
-    echo "  logs <service>    - Follow service logs"
-    echo "  sync <service>    - Force upload source to server"
+    echo "  deploy [service]   - Backup + build + restart (all or specific)"
+    echo "  build [service]    - Sync + build image only"
+    echo "  restart <service>  - Restart a service (no rebuild)"
+    echo "  rollback <service> - Rollback to previous version"
+    echo "  status             - Show running containers"
+    echo "  logs <service>     - Follow service logs"
+    echo "  sync <service>     - Force upload source to server"
     echo ""
-    echo "Services (ali): website, help, account, account-api, app, app-api, jiabu, jiabu-api, status, api-gateway, deploy"
+    echo "Services (ali): website, help, account, account-api, app, app-api, jiabu, jiabu-api, status, api-gateway, deploy, demo, demo-api"
     echo "Services (tx):  developer, docs"
     exit 1
 }
@@ -158,8 +207,17 @@ do_build() {
 }
 
 do_deploy() {
-    do_build "$1"
-    compose_restart "$1"
+    local service=$1
+    deploy_guard "$service"
+    if do_build "$service"; then
+        compose_restart "$service"
+        log_info "Deploy succeeded: $service"
+    else
+        log_error "Build failed: $service"
+        rollback_service "$service"
+        DEPLOY_FAILURES+=("$service")
+        return 1
+    fi
 }
 
 CMD="${1:-}"
@@ -168,8 +226,8 @@ TARGET="${2:-}"
 case "$CMD" in
     deploy)
         if [ -z "$TARGET" ]; then
-            for svc in "${ALI_SERVICES[@]}"; do do_deploy "$svc"; done
-            for svc in "${TX_SERVICES[@]}"; do do_deploy "$svc"; done
+            for svc in "${ALI_SERVICES[@]}"; do do_deploy "$svc" || true; done
+            for svc in "${TX_SERVICES[@]}"; do do_deploy "$svc" || true; done
         else
             [ -z "$(get_server "$TARGET")" ] && { echo "Unknown service: $TARGET"; usage; }
             do_deploy "$TARGET"
@@ -211,6 +269,11 @@ case "$CMD" in
         ssh "$server" "cd $compose_dir && docker compose logs -f --tail=100 $image"
         ;;
 
+    rollback)
+        [ -z "$TARGET" ] && { echo "Usage: $0 rollback <service>"; exit 1; }
+        rollback_service "$TARGET"
+        ;;
+
     *)
         usage
         ;;
@@ -218,3 +281,7 @@ esac
 
 echo ""
 echo "=== Done ==="
+if [ ${#DEPLOY_FAILURES[@]} -gt 0 ]; then
+    log_error "Failed services: ${DEPLOY_FAILURES[*]}"
+    exit 1
+fi
