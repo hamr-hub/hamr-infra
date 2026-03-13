@@ -31,6 +31,9 @@ services:
       - hamr-app
       - hamr-status
       - hamr-api-gateway
+      - hamr-jiabu
+      - hamr-deploy
+      - hamr-demo
 
   hamr-website:
     build: ../../repos/hamr-website
@@ -84,7 +87,10 @@ services:
     networks:
       - hamr-net
     depends_on:
-      hamr-jiabu:
+      postgres:
+        condition: service_healthy
+
+  hamr-jiabu:
     build: ../../repos/hamr-jiabu/frontend
     image: hamr-jiabu:latest
     container_name: hamr-jiabu
@@ -107,9 +113,6 @@ services:
     depends_on:
       - postgres
       - hamr-app-api
-
-  postgres:
-        condition: service_healthy
 
   hamr-api-gateway:
     build: ../../repos/hamr-api
@@ -149,6 +152,25 @@ services:
     image: hamr-deploy:latest
     container_name: hamr-deploy
     restart: unless-stopped
+    networks:
+      - hamr-net
+
+  hamr-demo:
+    build: ../../repos/hamr-demo/frontend
+    image: hamr-demo:latest
+    container_name: hamr-demo
+    restart: unless-stopped
+    networks:
+      - hamr-net
+
+  hamr-demo-api:
+    build: ../../repos/hamr-demo/backend
+    image: hamr-demo-api:latest
+    container_name: hamr-demo-api
+    restart: unless-stopped
+    environment:
+      PORT: 3004
+      RUST_LOG: info
     networks:
       - hamr-net
 

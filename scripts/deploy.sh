@@ -19,6 +19,11 @@ declare -A SERVICE_MAP=(
     [account-api]="hamr-account-api"
     [app]="hamr-app"
     [app-api]="hamr-app-api"
+    [jiabu]="hamr-jiabu"
+    [jiabu-api]="hamr-jiabu-api"
+    [status]="hamr-status"
+    [api-gateway]="hamr-api-gateway"
+    [deploy]="hamr-deploy"
 )
 
 # 服务 → 源码相对路径（相对 repos/）
@@ -31,9 +36,14 @@ declare -A SOURCE_MAP=(
     [account-api]="hamr-account/backend"
     [app]="hamr-app/frontend"
     [app-api]="hamr-app/backend"
+    [jiabu]="hamr-jiabu/frontend"
+    [jiabu-api]="hamr-jiabu/backend"
+    [status]="hamr-status"
+    [api-gateway]="hamr-api"
+    [deploy]="hamr-deploy"
 )
 
-ALI_SERVICES=(website help account account-api app app-api)
+ALI_SERVICES=(website help account account-api app app-api jiabu jiabu-api status api-gateway deploy)
 TX_SERVICES=(developer docs)
 
 usage() {
@@ -47,14 +57,14 @@ usage() {
     echo "  logs <service>    - Follow service logs"
     echo "  sync <service>    - Force upload source to server"
     echo ""
-    echo "Services (ali): website, help, account, account-api, app, app-api"
+    echo "Services (ali): website, help, account, account-api, app, app-api, jiabu, jiabu-api, status, api-gateway, deploy"
     echo "Services (tx):  developer, docs"
     exit 1
 }
 
 get_server() {
     case "$1" in
-        website|help|account|account-api|app|app-api) echo "$ALI_HOST" ;;
+        website|help|account|account-api|app|app-api|jiabu|jiabu-api|status|api-gateway|deploy) echo "$ALI_HOST" ;;
         developer|docs) echo "$TX_HOST" ;;
         *) echo "" ;;
     esac

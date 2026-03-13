@@ -11,3 +11,10 @@ scrape_configs:
       - targets: ["node-exporter:9100"]
         labels:
           instance: sshali
+
+  - job_name: hamr-api-gateway
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["hamr-api-gateway:8090"]
+        labels:
+          service: api-gateway

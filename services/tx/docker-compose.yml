@@ -21,3 +21,12 @@ services:
       - "127.0.0.1:8201:80"
     networks:
       - hamr-net
+
+  hamr-deploy:
+    image: hamr-deploy:latest
+    container_name: hamr-deploy
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8202:80"
+    networks:
+      - hamr-net

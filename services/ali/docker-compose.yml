@@ -7,6 +7,7 @@ volumes:
   grafana_data:
   postgres_account_data:
   postgres_app_data:
+  postgres_jiabu_data:
 
 services:
   # ===== 静态前端 =====
@@ -33,6 +34,8 @@ services:
     image: hamr-account:latest
     container_name: hamr-account
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:8102:80"
     networks:
       - hamr-net
 
@@ -74,6 +77,8 @@ services:
     image: hamr-app:latest
     container_name: hamr-app
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:8103:80"
     networks:
       - hamr-net
 
@@ -104,6 +109,70 @@ services:
       - postgres_app_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hamr} -d hamr_app"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - hamr-net
+
+  # ===== API 网关 =====
+  hamr-api-gateway:
+    image: hamr-api-gateway:latest
+    container_name: hamr-api-gateway
+    restart: unless-stopped
+    environment:
+      PORT: 8090
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      ACCOUNT_SERVICE_URL: http://hamr-account-api:3001
+      APP_SERVICE_URL: http://hamr-app-api:3002
+      JIABU_SERVICE_URL: http://hamr-jiabu-api:3003
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-60}
+      RUST_LOG: info
+    ports:
+      - "127.0.0.1:8090:8090"
+    networks:
+      - hamr-net
+    depends_on:
+      - hamr-account-api
+      - hamr-app-api
+
+  # ===== JiaBu 决策系统 =====
+  hamr-jiabu:
+    image: hamr-jiabu:latest
+    container_name: hamr-jiabu
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8104:80"
+    networks:
+      - hamr-net
+
+  hamr-jiabu-api:
+    image: hamr-jiabu-api:latest
+    container_name: hamr-jiabu-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-hamr}:${POSTGRES_PASSWORD:?}@hamr-postgres-jiabu:5432/hamr_jiabu
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      PORT: 3003
+      RUST_LOG: info
+    networks:
+      - hamr-net
+    depends_on:
+      hamr-postgres-jiabu:
+        condition: service_healthy
+
+  hamr-postgres-jiabu:
+    image: postgres:16-alpine
+    container_name: hamr-postgres-jiabu
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hamr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: hamr_jiabu
+    volumes:
+      - postgres_jiabu_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hamr} -d hamr_jiabu"]
       interval: 5s
       timeout: 5s
       retries: 10
