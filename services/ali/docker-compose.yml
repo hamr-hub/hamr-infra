@@ -10,6 +10,16 @@ volumes:
   postgres_jiabu_data:
 
 services:
+  # ===== 开发者门户 =====
+  hamr-developer:
+    image: hamr-developer:latest
+    container_name: hamr-developer
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8105:80"
+    networks:
+      - hamr-net
+
   # ===== 静态前端 =====
   hamr-website:
     image: hamr-website:latest
