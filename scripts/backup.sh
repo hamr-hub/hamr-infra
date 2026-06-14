@@ -21,12 +21,12 @@ backup_postgres() {
     local backup_file="$BACKUP_DIR/postgres/hamr_db_${DATE}.sql.gz"
     mkdir -p "$BACKUP_DIR/postgres"
 
-    if docker ps --format '{{.Names}}' | grep -q "^hamr-postgres$"; then
-        docker exec hamr-postgres pg_dumpall -U postgres | gzip > "$backup_file" \
+    if docker ps --format '{{.Names}}' | grep -q "^postgresql_pnkk-postgresql_PnkK-1$"; then
+        docker exec postgresql_pnkk-postgresql_PnkK-1 pg_dumpall -U postgres | gzip > "$backup_file" \
             || error_exit "PostgreSQL backup failed"
         log "PostgreSQL backup saved: $backup_file ($(du -sh "$backup_file" | cut -f1))"
     else
-        log "WARN: hamr-postgres container not running, skipping"
+        log "WARN: postgresql_pnkk-postgresql_PnkK-1 container not running, skipping"
     fi
 }
 
@@ -35,15 +35,15 @@ backup_redis() {
     local backup_file="$BACKUP_DIR/redis/hamr_redis_${DATE}.rdb"
     mkdir -p "$BACKUP_DIR/redis"
 
-    if docker ps --format '{{.Names}}' | grep -q "^hamr-redis$"; then
-        docker exec hamr-redis redis-cli BGSAVE
+    if docker ps --format '{{.Names}}' | grep -q "^redis_6frz-redis_6frZ-1$"; then
+        docker exec redis_6frz-redis_6frZ-1 redis-cli -a F8W5CNRr6AYLcaP8 BGSAVE
         sleep 3
-        docker cp hamr-redis:/data/dump.rdb "$backup_file" \
+        docker cp redis_6frz-redis_6frZ-1:/data/dump.rdb "$backup_file" \
             || error_exit "Redis backup failed"
         gzip "$backup_file"
         log "Redis backup saved: ${backup_file}.gz ($(du -sh "${backup_file}.gz" | cut -f1))"
     else
-        log "WARN: hamr-redis container not running, skipping"
+        log "WARN: redis_6frz-redis_6frZ-1 container not running, skipping"
     fi
 }
 
