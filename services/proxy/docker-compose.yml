@@ -83,7 +83,7 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-hamr}:${POSTGRES_PASSWORD:?}@hamr-postgres:5432/hamr_account
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      PORT: 3001
+      PORT: ${HAMR_ACCOUNT_API_PORT:-3001}
     networks:
       - hamr-net
     depends_on:
@@ -106,8 +106,8 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-hamr}:${POSTGRES_PASSWORD:?}@hamr-postgres:5432/${POSTGRES_DB:-hamr_jiabu}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      HAMR_APP_URL: http://hamr-app-api:8081
-      PORT: 8082
+      HAMR_APP_URL: http://hamr-app-api:${HAMR_APP_API_PORT:-3002}
+      PORT: ${HAMR_JIABU_API_PORT:-8082}
     networks:
       - hamr-net
     depends_on:
@@ -121,10 +121,10 @@ services:
     restart: unless-stopped
     environment:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      ACCOUNT_SERVICE_URL: http://hamr-account-api:3001
-      APP_SERVICE_URL: http://hamr-app-api:3002
+      ACCOUNT_SERVICE_URL: http://hamr-account-api:${HAMR_ACCOUNT_API_PORT:-3001}
+      APP_SERVICE_URL: http://hamr-app-api:${HAMR_APP_API_PORT:-3002}
       RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-60}
-      PORT: 8090
+      PORT: ${HAMR_API_GATEWAY_PORT:-8090}
     networks:
       - hamr-net
     depends_on:
@@ -169,7 +169,7 @@ services:
     container_name: hamr-demo-api
     restart: unless-stopped
     environment:
-      PORT: 3004
+      PORT: ${HAMR_DEMO_API_PORT:-3004}
       RUST_LOG: info
     networks:
       - hamr-net
@@ -182,7 +182,7 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-hamr}:${POSTGRES_PASSWORD:?}@hamr-postgres:5432/hamr_app
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      PORT: 3002
+      PORT: ${HAMR_APP_API_PORT:-3002}
     networks:
       - hamr-net
     depends_on:
@@ -259,7 +259,7 @@ services:
     restart: unless-stopped
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_ROOT_URL=http://status.hamr.top/grafana
       - GF_SERVER_SERVE_FROM_SUB_PATH=true

@@ -56,7 +56,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-hamr}:${POSTGRES_PASSWORD:?}@hamr-postgres-account:5432/hamr_account
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      PORT: 3001
+      PORT: ${HAMR_ACCOUNT_API_PORT:-3001}
       RUST_LOG: info
     networks:
       - hamr-net
@@ -99,7 +99,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-hamr}:${POSTGRES_PASSWORD:?}@hamr-postgres-app:5432/hamr_app
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      PORT: 3002
+      PORT: ${HAMR_APP_API_PORT:-3002}
       RUST_LOG: info
     networks:
       - hamr-net
@@ -131,11 +131,11 @@ services:
     container_name: hamr-api-gateway
     restart: unless-stopped
     environment:
-      PORT: 8090
+      PORT: ${HAMR_API_GATEWAY_PORT:-8090}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      ACCOUNT_SERVICE_URL: http://hamr-account-api:3001
-      APP_SERVICE_URL: http://hamr-app-api:3002
-      JIABU_SERVICE_URL: http://hamr-jiabu-api:3003
+      ACCOUNT_SERVICE_URL: http://hamr-account-api:${HAMR_ACCOUNT_API_PORT:-3001}
+      APP_SERVICE_URL: http://hamr-app-api:${HAMR_APP_API_PORT:-3002}
+      JIABU_SERVICE_URL: http://hamr-jiabu-api:${HAMR_JIABU_API_PORT:-8082}
       RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-60}
       RUST_LOG: info
     ports:
@@ -163,7 +163,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-hamr}:${POSTGRES_PASSWORD:?}@hamr-postgres-jiabu:5432/hamr_jiabu
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      PORT: 3003
+      PORT: ${HAMR_JIABU_API_PORT:-8082}
       RUST_LOG: info
     networks:
       - hamr-net
@@ -233,7 +233,7 @@ services:
       - "127.0.0.1:3000:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_ROOT_URL=http://status.hamr.top/grafana
       - GF_SERVER_SERVE_FROM_SUB_PATH=true

@@ -1,0 +1,64 @@
+# GitHub Actions CI for hamr-infra
+#
+# 门禁只有一条：**端口契约一致性**。
+#
+# 背景（proposed-fixes-v2 #08，P0）：同一个服务在不同 compose 里被写成不同
+# 端口（hamr-jiabu-api：ali 栈 3003 / proxy 栈 8082 / nginx 8082），导致线上
+# jiabu.hamr.store 的 /api/ 是 502。
+#
+# `scripts/check-port-consistency.sh` 校验四处一致：
+#   services/ports.env（唯一真源）
+#   services/*/docker-compose.yml（变量默认值）
+#   services/proxy/nginx.conf（反代 upstream 字面量）
+#   <各后端仓库>/backend/.env.example（服务自身声明的 PORT）
+#
+# 刻意不做的事：
+#   - 不部署 compose、不连真实服务器 —— CI 不碰任何线上环境
+#   - 不做 `docker compose config` 全量校验 —— 需要所有镜像与 secret 齐备，
+#     在 CI 里跑只会因为缺 secret 而误报
+
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  port-consistency:
+    name: port consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 端口契约的「真源」在 infra 仓库，但要比对的 .env.example 分散在各个
+      # 后端子仓库里 —— 这里把相关子仓库一并拉到 _repos/ 下。
+      - name: Checkout sibling repos
+        uses: actions/checkout@v4
+        with:
+          repository: hamr-hub/hamr-account
+          path: _repos/hamr-account
+      - uses: actions/checkout@v4
+        with:
+          repository: hamr-hub/hamr-app
+          path: _repos/hamr-app
+      - uses: actions/checkout@v4
+        with:
+          repository: hamr-hub/hamr-demo
+          path: _repos/hamr-demo
+      - uses: actions/checkout@v4
+        with:
+          repository: hamr-hub/hamr-jiabu
+          path: _repos/hamr-jiabu
+      - uses: actions/checkout@v4
+        with:
+          repository: hamr-hub/hamr-api
+          path: _repos/hamr-api
+
+      - name: Check port contract
+        env:
+          HAMR_REPOS_ROOT: ${{ github.workspace }}/_repos
+        run: ./scripts/check-port-consistency.sh

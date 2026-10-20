@@ -111,6 +111,68 @@ HamR 基础设施运维项目负责平台底层支撑，包括 DNS 管理、网�
 
 ## 🏗️ 基础设施架构
 
+### 端口契约（唯一真源：`services/ports.env`）
+
+> 背景（proposed-fixes-v2 #08，P0）：同一个服务在不同 compose 里被写成了不同的
+> 端口 —— `hamr-jiabu-api` 在 `services/ali/` 是 `3003`、在 `services/proxy/`
+> 是 `8082`，而 nginx 反代写的是 `8082`。结果线上 `jiabu.hamr.store` 的
+> `/api/` 是 **502**。
+
+| 服务 | 容器内端口 | 变量 | 备注 |
+|------|-----------|------|------|
+| hamr-account-api | 3001 | `HAMR_ACCOUNT_API_PORT` | |
+| hamr-app-api | 3002 | `HAMR_APP_API_PORT` | |
+| hamr-jiabu-api | 8082 | `HAMR_JIABU_API_PORT` | 与 `hamr-jiabu` 代码默认值一致 |
+| hamr-demo-api | 3004 | `HAMR_DEMO_API_PORT` | |
+| hamr-api-gateway | 8090 | `HAMR_API_GATEWAY_PORT` | |
+| grafana | 3000 | `HAMR_GRAFANA_PORT` | 管理密码**必须**显式提供 |
+
+约定：
+
+1. `services/ports.env` 是端口的**唯一真源**。
+2. 各 `docker-compose.yml` 用 `${VAR:-canonical}` 引用，默认值与真源一致 ——
+   不带 `--env-file` 启动也能得到正确拓扑。
+3. `scripts/check-port-consistency.sh` 校验「真源 ↔ compose 默认值 ↔ nginx
+   反代 ↔ 各后端仓库 `.env.example`」四处一致，任何一处漂移即失败，可挂 CI。
+4. **端口不得在多个地方各写一份** —— 新增服务时先改 `ports.env`。
+
+启动（推荐显式指定真源文件）：
+
+```bash
+docker compose --env-file services/ports.env -f services/proxy/docker-compose.yml up -d
+```
+
+校验：
+
+```bash
+./scripts/check-port-consistency.sh
+```
+
+### 部署拓扑与一个待确认项
+
+仓库里有三套 compose，覆盖范围不同：
+
+| compose | 容器数 | 包含 Grafana | 包含 nginx |
+|---------|-------|-------------|-----------|
+| `services/proxy/` | 21 | ✅ | ✅ |
+| `services/ali/` | 16 | ✅ | ❌ |
+| `services/tx/` | 3 | ❌ | ❌ |
+
+⚠️ **待确认（2026-10-20 审计发现，需登机核对后才能定论）**：
+
+- `scripts/dns/dns-records.conf` 把 `status.hamr.top` 指向 `39.103.188.33`，
+  而 nginx 的 `status.hamr.top` 站点需要 `grafana` 与 `hamr-status` 两个容器
+  —— 这两个只在 `services/proxy/` 里同时存在。因此**只有当 proxy 栈跑在
+  39.103.188.33 上时，`status.hamr.top` 才能正常工作**。
+- 目录名 `services/ali/` 与 `services/tx/` 相对真实主机是**反的**：
+  `services/ali/` 里装的是 hamr.store 系服务（website / help / account /
+  app / jiabu），它们的 DNS 全部指向 `43.133.224.11`；`services/tx/` 里的
+  developer / docs / deploy 则对应 `hamr.top` → `39.103.188.33`。
+- 因为方向依赖真实部署情况，**在登机核对之前不要直接改 DNS A 记录** ——
+  改错方向会直接把状态页打挂。核对命令见 `scripts/health-check.sh`。
+
+### 原有架构图
+
 ```
 ┌─────────────────────────────────┐
 │      Cloudflare CDN + WAF       │
